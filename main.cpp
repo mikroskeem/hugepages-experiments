@@ -144,13 +144,10 @@ int main(int argc, char **argv) {
 	}
 
 	// Adjust limits if needed.
+	bool memlock_enough = true;
 	if (memlock_cur.rlim_max != RLIM_INFINITY && memlock_cur.rlim_max < sz) {
 		fprintf(stderr, "RLIM_MEMLOCK hard limit is too small (%lu < %lu)\n", memlock_cur.rlim_max, sz);
-
-		// XXX: That's hard failure only for non-superusers?
-		if (getuid() != 0) {
-			return 1;
-		}
+		memlock_enough = false;
 	}
 
 	if (memlock_cur.rlim_cur < sz && memlock_cur.rlim_max >= sz) {
@@ -165,7 +162,11 @@ int main(int argc, char **argv) {
 	int flags = SHM_HUGETLB | IPC_CREAT | SHM_R | SHM_W | ((shift & _MAP_HUGE_MASK) << _MAP_HUGE_SHIFT);
 	int shmid = shmget(IPC_PRIVATE, sz, flags);
 	if (shmid == -1) {
-		throw std::system_error(errno, std::generic_category(), "shmget");
+		int err = errno;
+		if (err == EPERM && !memlock_enough) {
+			fprintf(stderr, "Caught EPERM while shmget(). Check '/proc/sys/vm/hugetlb_shm_group'? (alternative to RLIM_MEMLOCK)\n");
+		}
+		throw std::system_error(err, std::generic_category(), "shmget");
 	}
 
 	char *shmaddr = (char *) shmat(shmid, NULL, 0);
