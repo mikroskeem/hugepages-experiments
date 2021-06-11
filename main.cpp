@@ -14,6 +14,7 @@
 #define MM_HUGEPAGES_PATH "/sys/kernel/mm/hugepages"
 #define _MAP_HUGE_MASK 0x3f
 #define _MAP_HUGE_SHIFT 26
+#define HONOR_MLOCK_ULIMIT_DEPRECATION true
 
 #define IS_POW2(n) ((n) > 0 && ((n) & ((n) - 1)) == 0)
 #define IS_DIV2(n) (((n) % 2) == 0)
@@ -137,6 +138,9 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Not enough available pages (need=%lu, free=%lu), allocation will fail very likely\n", div, page_info.second);
 	};
 
+#if HONOR_MLOCK_ULIMIT_DEPRECATION
+	// TODO: check if we have CAP_IPC_LOCK or user is in group id specified in /proc/sys/vm/hugetlb_shm_group
+#else // HONOR_MLOCK_ULIMIT_DEPRECATION
 	// Check rlimit
 	struct rlimit memlock_cur;
 	if (getrlimit(RLIMIT_MEMLOCK, &memlock_cur) < 0) {
@@ -157,15 +161,18 @@ int main(int argc, char **argv) {
 			throw std::system_error(errno, std::generic_category(), "setrlimit RLIMIT_MEMLOCK");
 		}
 	}
+#endif // HONOR_MLOCK_ULIMIT_DEPRECATION
 
 	// Allocate using shmget
 	int flags = SHM_HUGETLB | IPC_CREAT | SHM_R | SHM_W | ((shift & _MAP_HUGE_MASK) << _MAP_HUGE_SHIFT);
 	int shmid = shmget(IPC_PRIVATE, sz, flags);
 	if (shmid == -1) {
 		int err = errno;
+#if HONOR_MLOCK_ULIMIT_DEPRECATION
 		if (err == EPERM && !memlock_enough) {
-			fprintf(stderr, "Caught EPERM while shmget(). Check '/proc/sys/vm/hugetlb_shm_group'? (alternative to RLIM_MEMLOCK)\n");
+			fprintf(stderr, "Caught EPERM while shmget(). Check '/proc/sys/vm/hugetlb_shm_group' or CAP_IPC_LOCK?\n");
 		}
+#endif // HONOR_MLOCK_ULIMIT_DEPRECATION
 		throw std::system_error(err, std::generic_category(), "shmget");
 	}
 
