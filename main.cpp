@@ -150,7 +150,9 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Not enough available pages (need=%lu, free=%lu), allocation will fail very likely\n", div, page_info.second);
 	};
 
+	bool memlock_enough = true;
 #if HONOR_MLOCK_ULIMIT_DEPRECATION
+	memlock_enough = false; // Don't bother
 	// TODO: check if we have CAP_IPC_LOCK or user is in group id specified in /proc/sys/vm/hugetlb_shm_group
 #else // HONOR_MLOCK_ULIMIT_DEPRECATION
 	// Check rlimit
@@ -160,7 +162,6 @@ int main(int argc, char **argv) {
 	}
 
 	// Adjust limits if needed.
-	bool memlock_enough = true;
 	if (memlock_cur.rlim_max != RLIM_INFINITY && memlock_cur.rlim_max < sz) {
 		fprintf(stderr, "RLIM_MEMLOCK hard limit is too small (%lu < %lu)\n", memlock_cur.rlim_max, sz);
 		memlock_enough = false;
@@ -180,11 +181,9 @@ int main(int argc, char **argv) {
 	int shmid = shmget(IPC_PRIVATE, sz, flags);
 	if (shmid == -1) {
 		int err = errno;
-#if !HONOR_MLOCK_ULIMIT_DEPRECATION
 		if (err == EPERM && !memlock_enough) {
 			fprintf(stderr, "Caught EPERM while shmget(). Check '/proc/sys/vm/hugetlb_shm_group' or CAP_IPC_LOCK?\n");
 		}
-#endif // HONOR_MLOCK_ULIMIT_DEPRECATION
 		throw std::system_error(err, std::generic_category(), "shmget");
 	}
 
