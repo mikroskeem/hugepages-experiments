@@ -3,15 +3,23 @@
 #include <sstream>
 #include <string>
 
+#include <unistd.h>
 #include <linux/limits.h>
 
 #include "cgroups.hpp"
 
-std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const unsigned short shift) {
-	// First, figure out this process' cgroup controllers.
-	std::ifstream proc_cg_file("/proc/self/cgroup");
+std::vector<cgroup::CGHierarchy> cgroup::get_hierarchies() {
+	return get_hierarchies(getpid());
+}
+
+std::vector<cgroup::CGHierarchy> cgroup::get_hierarchies(const pid_t pid) {
+	char pathbuf[PATH_MAX];
+	snprintf(pathbuf, PATH_MAX-1, "/proc/%u/cgroup", pid);
+
+	std::ifstream proc_cg_file(pathbuf);
 	std::string cg_line;
 	std::vector<CGHierarchy> collected_cg_hierarchies;
+
 	while (std::getline(proc_cg_file, cg_line)) {
 		// Format: hierarchy-ID:controller-list(c0,c1,c2,c3):cg-path
 		std::string hier_elem;
@@ -30,6 +38,16 @@ std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const unsigned short shift) 
 
 		collected_cg_hierarchies.push_back(std::make_tuple(std::stoi(hierarchy[0]), controllers, hierarchy[2]));
 	}
+
+	return collected_cg_hierarchies;
+}
+
+std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const unsigned short shift) {
+	return cgroup::check_hugetlb_limit(getpid(), shift);
+}
+
+std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const pid_t pid, const unsigned short shift) {
+	auto collected_cg_hierarchies = get_hierarchies(pid);
 
 	// Try finding hugetlb controller
 	// XXX: supports only cgroups v2 at the moment
