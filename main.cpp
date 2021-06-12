@@ -18,6 +18,8 @@
 #include <sys/shm.h>
 
 #define MM_HUGEPAGES_PATH "/sys/kernel/mm/hugepages"
+#define CG_PATH "/sys/fs/cgroup"
+
 #define _MAP_HUGE_MASK 0x3f
 #define _MAP_HUGE_SHIFT 26
 #define HONOR_MLOCK_ULIMIT_DEPRECATION true
@@ -176,7 +178,7 @@ static std::unique_ptr<size_t> check_cgroup_limits(const unsigned short shift) {
 
 	// Try to read hugetlb limits
 	char pathbuf[PATH_MAX];
-	snprintf(pathbuf, PATH_MAX-1, "/sys/fs/cgroup%s/hugetlb.%lu%s.max", std::get<2>(hugetlb_controller).c_str(), sz, szsuffix.c_str());
+	snprintf(pathbuf, PATH_MAX-1, CG_PATH "%s/hugetlb.%lu%s.max", std::get<2>(hugetlb_controller).c_str(), sz, szsuffix.c_str());
 
 	std::ifstream hugetlb_max_file(pathbuf);
 	if (!hugetlb_max_file.good()) {
