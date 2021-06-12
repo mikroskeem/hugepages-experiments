@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <exception>
 #include <fstream>
 #include <string>
@@ -11,14 +12,6 @@
 #include "hugepages.hpp"
 
 #define IS_POW2(n) ((n) > 0 && ((n) & ((n) - 1)) == 0)
-
-inline static unsigned short determine_shift(size_t size) {
-	unsigned short shift = 0;
-	while (size >>= 1) {
-		shift++;
-	}
-	return shift;
-}
 
 static std::unique_ptr<size_t> is_hugepage(const std::string &filename) {
 	/*
@@ -56,7 +49,7 @@ std::vector<hugepage::HugepageInfo> hugepage::determine_supported_hps() {
 		char *filename = basename(path);
 
 		if (const auto hugesize = is_hugepage(filename)) {
-			collected.push_back(std::make_pair(*hugesize, determine_shift(*hugesize)));
+			collected.push_back(std::make_pair(*hugesize, log2(*hugesize)));
 		}
 	}
 	closedir(dir);
