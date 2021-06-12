@@ -50,11 +50,11 @@ static std::unique_ptr<size_t> is_hugepage(const std::string &filename) {
 }
 
 inline static unsigned short determine_shift(size_t size) {
-	unsigned short i = 0;
+	unsigned short shift = 0;
 	while (size >>= 1) {
-		i++;
+		shift++;
 	}
-	return i;
+	return shift;
 }
 
 static void determine_supported_hps(std::vector<HugepageInfo> &supported_hps) {
@@ -83,7 +83,7 @@ static void determine_supported_hps(std::vector<HugepageInfo> &supported_hps) {
 	std::copy(std::begin(collected), std::end(collected), std::back_inserter(supported_hps));
 }
 
-static std::unique_ptr<unsigned short> get_page_size(const std::vector<HugepageInfo> &page_sizes, const size_t size) {
+static std::unique_ptr<unsigned short> determine_suitable_page_shift(const std::vector<HugepageInfo> &page_sizes, const size_t size) {
 	if (!IS_DIV2(size)) {
 		return nullptr;
 	}
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
 	size_t sz = multiplier * (1 << shiftarg);
 
 	// Check if this is size & shift supported
-	if (const auto shift_opt = get_page_size(supported_hps, sz)) {
+	if (const auto shift_opt = determine_suitable_page_shift(supported_hps, sz)) {
 		shift = *shift_opt;
 		div = sz / (1 << shift);
 		fprintf(stderr, "size=%lu, shift=%lu, div=%lu\n", sz, shift, div);
