@@ -41,6 +41,7 @@ enable_controller "${cgpath}/${cg_name}" "hugetlb" || true
 # Set up hugetlb limits
 # In this case, do 1GB
 echo $(( 1 * 1073741824 )) > "${cgpath}/${cg_name}/hugetlb.1GB.max"
+echo $(( 32 * 1024 * 1024 )) > "${cgpath}/${cg_name}/memory.max"
 
 if [ -n "${*:-}" ]; then
 	exec sudo -u "#${ORIG_UID}" -g "#${ORIG_GID}" -- "${@}"
