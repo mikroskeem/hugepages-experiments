@@ -9,14 +9,14 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+#include <linux/mman.h>
+
 #define MM_HUGEPAGES_PATH "/sys/kernel/mm/hugepages"
 #define CG_PATH "/sys/fs/cgroup"
 
 #include "cgroups.hpp"
 #include "hugepages.hpp"
 
-#define _MAP_HUGE_MASK 0x3f
-#define _MAP_HUGE_SHIFT 26
 #define HONOR_MLOCK_ULIMIT_DEPRECATION true
 
 int main(int argc, char **argv) {
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
 #endif // HONOR_MLOCK_ULIMIT_DEPRECATION
 
 	// Allocate using shmget
-	int flags = SHM_HUGETLB | IPC_CREAT | SHM_R | SHM_W | ((shift & _MAP_HUGE_MASK) << _MAP_HUGE_SHIFT);
+	int flags = SHM_HUGETLB | IPC_CREAT | SHM_R | SHM_W | ((shift & MAP_HUGE_MASK) << MAP_HUGE_SHIFT);
 	int shmid = shmget(IPC_PRIVATE, sz, flags);
 	if (shmid == -1) {
 		int err = errno;
