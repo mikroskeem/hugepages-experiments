@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -49,6 +50,7 @@ inline static unsigned short determine_shift(size_t size) {
 }
 
 static void determine_supported_hps(std::vector<std::pair<size_t, unsigned short>> &supported_hps) {
+	std::vector<std::pair<size_t, unsigned short>> collected;
 	DIR *dir;
 	struct dirent *ent;
 	if ((dir = opendir(MM_HUGEPAGES_PATH)) == nullptr) {
@@ -60,10 +62,17 @@ static void determine_supported_hps(std::vector<std::pair<size_t, unsigned short
 		char *filename = basename(path);
 
 		if (const auto hugesize = is_hugepage(filename)) {
-			supported_hps.push_back(std::make_pair(*hugesize, determine_shift(*hugesize)));
+			collected.push_back(std::make_pair(*hugesize, determine_shift(*hugesize)));
 		}
 	}
 	closedir(dir);
+
+	// Sort the vector
+	std::sort(std::begin(collected), std::end(collected), [](auto a, auto b) {
+		return a.first < b.first;
+	});
+
+	std::copy(std::begin(collected), std::end(collected), std::back_inserter(supported_hps));
 }
 
 static std::unique_ptr<unsigned short> get_page_size(const std::vector<std::pair<size_t, unsigned short>> &page_sizes, const size_t size) {
@@ -71,6 +80,7 @@ static std::unique_ptr<unsigned short> get_page_size(const std::vector<std::pair
 		return nullptr;
 	}
 
+	// Read page sizes in reverse
 	for (auto it = page_sizes.rbegin(); it != page_sizes.rend(); ++it) {
 		auto elem = *it;
 		auto hp_size = elem.first;
