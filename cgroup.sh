@@ -17,7 +17,7 @@ fi
 enable_controller () {
 	local cg="${1}"
 	local what="${2}"
-	if ! grep -q "${what}" "${cg}"/cgroup.controllers && ! grep -q "${what}" "${cg}"/cgroup.subtree_control; then
+	if ! grep -q "${what}" "${cg}"/cgroup.subtree_control; then
 		echo "+${what}" > "${cg}"/cgroup.subtree_control
 	fi
 }
