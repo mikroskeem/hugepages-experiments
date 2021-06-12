@@ -209,7 +209,7 @@ int main(int argc, char **argv) {
 		}
 		fprintf(stderr, "\n");
 	} else {
-		fprintf(stderr, "\n*** Caught SIGBUS, tried writing at len=%lu. Adjusting maxlen\n", i);
+		fprintf(stderr, "\n*** Caught SIGBUS, tried writing at len=%lu (div=%lu). Adjusting maxlen to it\n", i, i / (1 << shift));
 		maxlen = i;
 	}
 
