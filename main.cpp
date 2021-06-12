@@ -1,5 +1,9 @@
-#include <iterator>
+#include <cerrno>
+#include <cstdio>
+#include <exception>
 #include <memory>
+#include <string>
+#include <system_error>
 
 #include <unistd.h>
 #include <sys/ipc.h>
@@ -21,8 +25,7 @@ int main(int argc, char **argv) {
 
 	// Print out supported page sizes
 	fprintf(stderr, "Supported huge page sizes:\n");
-	for (auto it = supported_hps.begin(); it != supported_hps.end(); ++it) {
-		auto elem = *it;
+	for (const auto elem : supported_hps) {
 		fprintf(stderr, "- size=%lu (shift=%u)\n", elem.first, elem.second);
 	}
 
