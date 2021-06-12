@@ -171,6 +171,10 @@ static std::unique_ptr<size_t> check_cgroup_limits(const unsigned short shift) {
 	std::string hugetlb_max_str;
 	hugetlb_max_file >> hugetlb_max_str;
 
+	if (hugetlb_max_str == "max") {
+		return nullptr;
+	}
+
 	return std::make_unique<size_t>(std::stol(hugetlb_max_str));
 }
 
