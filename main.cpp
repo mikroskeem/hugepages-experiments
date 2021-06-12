@@ -28,22 +28,7 @@
 #define IS_DIV2(n) (((n) % 2) == 0)
 
 using CGHierarchy = std::tuple<unsigned int, std::vector<std::string>, std::string>;
-
-template <typename T>
-std::ostream& operator<< (std::ostream& out, const std::vector<T>& v) {
-	if (!v.empty()) {
-		out << '[';
-		std::copy (v.begin(), v.end(), std::ostream_iterator<T>(out, ", "));
-		out << "\b\b]";
-	}
-	return out;
-}
-
-static inline void rtrim(std::string &s) {
-	s.erase(std::find_if(s.rbegin(), s.rend(), [](auto ch) {
-		return !std::isspace(ch);
-	}).base(), s.end());
-}
+using HugepageInfo = std::pair<size_t, unsigned short>;
 
 static std::unique_ptr<size_t> is_hugepage(const std::string &filename) {
 	/*
@@ -72,8 +57,8 @@ inline static unsigned short determine_shift(size_t size) {
 	return i;
 }
 
-static void determine_supported_hps(std::vector<std::pair<size_t, unsigned short>> &supported_hps) {
-	std::vector<std::pair<size_t, unsigned short>> collected;
+static void determine_supported_hps(std::vector<HugepageInfo> &supported_hps) {
+	std::vector<HugepageInfo> collected;
 	DIR *dir;
 	struct dirent *ent;
 	if ((dir = opendir(MM_HUGEPAGES_PATH)) == nullptr) {
@@ -98,7 +83,7 @@ static void determine_supported_hps(std::vector<std::pair<size_t, unsigned short
 	std::copy(std::begin(collected), std::end(collected), std::back_inserter(supported_hps));
 }
 
-static std::unique_ptr<unsigned short> get_page_size(const std::vector<std::pair<size_t, unsigned short>> &page_sizes, const size_t size) {
+static std::unique_ptr<unsigned short> get_page_size(const std::vector<HugepageInfo> &page_sizes, const size_t size) {
 	if (!IS_DIV2(size)) {
 		return nullptr;
 	}
