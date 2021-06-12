@@ -2,8 +2,6 @@
 #include <tuple>
 #include <vector>
 
-#include <sys/types.h>
-
 #ifndef CG_PATH
 #define CG_PATH "/sys/fs/cgroup"
 #endif // CG_PATH

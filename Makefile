@@ -1,4 +1,4 @@
-main: main.o cgroups.o
+main: main.o cgroups.o hugepages.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^
 
 clean:

@@ -1,123 +1,25 @@
-#include <algorithm>
-#include <fstream>
-#include <iostream>
 #include <iterator>
 #include <memory>
-#include <sstream>
-#include <string>
-#include <tuple>
-#include <vector>
 
-#include <dirent.h>
-#include <libgen.h>
 #include <unistd.h>
 #include <sys/ipc.h>
-#include <sys/resource.h>
 #include <sys/shm.h>
-
-#include "cgroups.hpp"
 
 #define MM_HUGEPAGES_PATH "/sys/kernel/mm/hugepages"
 #define CG_PATH "/sys/fs/cgroup"
+
+#include "cgroups.hpp"
+#include "hugepages.hpp"
 
 #define _MAP_HUGE_MASK 0x3f
 #define _MAP_HUGE_SHIFT 26
 #define HONOR_MLOCK_ULIMIT_DEPRECATION true
 
 #define IS_POW2(n) ((n) > 0 && ((n) & ((n) - 1)) == 0)
-#define IS_DIV2(n) (((n) % 2) == 0)
-
-using CGHierarchy = std::tuple<unsigned int, std::vector<std::string>, std::string>;
-using HugepageInfo = std::pair<size_t, unsigned short>;
-
-static std::unique_ptr<size_t> is_hugepage(const std::string &filename) {
-	/*
-	 * From https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt:
-	 *
-	 * > For each huge page size supported by the running kernel, a subdirectory
-	 * > will exist, of the form:
-	 * >
-	 * > hugepages-${size}kB
-	 */
-	const std::string prefix("hugepages-");
-	const auto found = filename.find(prefix);
-	if (found == std::string::npos) {
-		return nullptr;
-	}
-
-	const std::string raw_size = filename.substr(prefix.length(), filename.length() - prefix.length() - 2);
-	return std::make_unique<size_t>(std::stol(raw_size) * 1024UL);
-}
-
-inline static unsigned short determine_shift(size_t size) {
-	unsigned short shift = 0;
-	while (size >>= 1) {
-		shift++;
-	}
-	return shift;
-}
-
-static void determine_supported_hps(std::vector<HugepageInfo> &supported_hps) {
-	std::vector<HugepageInfo> collected;
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir(MM_HUGEPAGES_PATH)) == nullptr) {
-		throw std::system_error(errno, std::generic_category(), "opendir " MM_HUGEPAGES_PATH);
-	}
-
-	while ((ent = readdir(dir)) != nullptr) {
-		char *path = ent->d_name;
-		char *filename = basename(path);
-
-		if (const auto hugesize = is_hugepage(filename)) {
-			collected.push_back(std::make_pair(*hugesize, determine_shift(*hugesize)));
-		}
-	}
-	closedir(dir);
-
-	// Sort the vector
-	std::sort(std::begin(collected), std::end(collected), [](auto a, auto b) {
-		return a.first < b.first;
-	});
-
-	std::copy(std::begin(collected), std::end(collected), std::back_inserter(supported_hps));
-}
-
-static std::unique_ptr<unsigned short> determine_suitable_page_shift(const std::vector<HugepageInfo> &page_sizes, const size_t size) {
-	if (!IS_DIV2(size)) {
-		return nullptr;
-	}
-
-	// Read page sizes in reverse
-	for (auto it = page_sizes.rbegin(); it != page_sizes.rend(); ++it) {
-		auto elem = *it;
-		auto hp_size = elem.first;
-		if (size >= hp_size && size % hp_size == 0) {
-			return std::make_unique<unsigned short>(elem.second);
-		}
-	}
-
-	return nullptr;
-}
-
-static std::pair<bool, size_t> check_available_pages(const size_t page_size, const size_t expected) {
-	auto pagesz_kb = page_size / 1024;
-	char pathbuf[PATH_MAX];
-	snprintf(pathbuf, PATH_MAX-1, MM_HUGEPAGES_PATH "/hugepages-%lukB/free_hugepages", pagesz_kb);
-
-	std::ifstream fhp_file(pathbuf);
-	std::string value;
-	fhp_file >> value;
-
-	size_t available = std::stol(value);
-
-	return std::make_pair(available >= expected, available);
-}
 
 int main(int argc, char **argv) {
 	// Figure out supported types
-	std::vector<std::pair<size_t, unsigned short>> supported_hps;
-	determine_supported_hps(supported_hps);
+	auto supported_hps = hugepage::determine_supported_hps();
 
 	// Print out supported page sizes
 	fprintf(stderr, "Supported huge page sizes:\n");
@@ -144,7 +46,7 @@ int main(int argc, char **argv) {
 	size_t sz = multiplier * (1 << shiftarg);
 
 	// Check if this is size & shift supported
-	if (const auto shift_opt = determine_suitable_page_shift(supported_hps, sz)) {
+	if (const auto shift_opt = hugepage::determine_suitable_page_shift(supported_hps, sz)) {
 		shift = *shift_opt;
 		div = sz / (1 << shift);
 		fprintf(stderr, "size=%lu, shift=%lu, div=%lu\n", sz, shift, div);
@@ -153,9 +55,9 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	auto page_info = check_available_pages((1 << shift), div);
-	if (!page_info.first) {
-		fprintf(stderr, "Not enough available pages (need=%lu, free=%lu), allocation will fail very likely\n", div, page_info.second);
+	const auto available_count = hugepage::get_available_page_count(shift);
+	if (available_count && *available_count < div) {
+		fprintf(stderr, "Not enough available pages (need=%lu, free=%lu), allocation will fail very likely\n", div, *available_count);
 	};
 
 	// Check cgroup limits to avoid nasty SIGBUS
