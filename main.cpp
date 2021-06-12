@@ -6,6 +6,8 @@
 
 #include <dirent.h>
 #include <libgen.h>
+#include <signal.h>
+#include <setjmp.h>
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/resource.h>
@@ -94,7 +96,17 @@ static std::pair<bool, size_t> check_available_pages(const size_t page_size, con
 	return std::make_pair(available >= expected, available);
 }
 
+static jmp_buf the_jmpbuf;
+static size_t i; // XXX: gross hack
+
+void sigbus(int sig) {
+	longjmp(the_jmpbuf, 1);
+}
+
 int main(int argc, char **argv) {
+	// Set up SIGBUS handler
+	signal(SIGBUS, sigbus);
+
 	// Figure out supported types
 	std::vector<std::pair<size_t, unsigned short>> supported_hps;
 	determine_supported_hps(supported_hps);
@@ -168,7 +180,7 @@ int main(int argc, char **argv) {
 	int shmid = shmget(IPC_PRIVATE, sz, flags);
 	if (shmid == -1) {
 		int err = errno;
-#if HONOR_MLOCK_ULIMIT_DEPRECATION
+#if !HONOR_MLOCK_ULIMIT_DEPRECATION
 		if (err == EPERM && !memlock_enough) {
 			fprintf(stderr, "Caught EPERM while shmget(). Check '/proc/sys/vm/hugetlb_shm_group' or CAP_IPC_LOCK?\n");
 		}
@@ -187,18 +199,26 @@ int main(int argc, char **argv) {
 
 	// Based on linux/tools/testing/selftests/vm/hugepage-shm.c
 	fprintf(stderr, "Starting the writes:\n");
-	for (size_t i = 0; i < sz; i++) {
-		shmaddr[i] = (char)(i);
-		if (!(i % (1024 * 1024))) {
-			fprintf(stderr, ".");
+	size_t maxlen = sz;
+	if (setjmp(the_jmpbuf) == 0) {
+		for (i = 0; i < maxlen; i++) {
+			shmaddr[i] = (char)(i);
+			if (!(i % (1024 * 1024))) {
+				fprintf(stderr, ".");
+			}
 		}
+		fprintf(stderr, "\n");
+	} else {
+		fprintf(stderr, "\n*** Caught SIGBUS, tried writing at len=%lu. Adjusting maxlen\n", i);
+		maxlen = i;
 	}
-	fprintf(stderr, "\n");
 
 	fprintf(stderr, "Starting the Check...");
-	for (size_t i = 0; i < sz; i++) {
+	for (i = 0; i < maxlen; i++) {
 		if (shmaddr[i] != (char) i) {
 			fprintf(stderr, "\nIndex %lu mismatched\n", i);
+			shmdt(shmaddr);
+			shmctl(shmid, IPC_RMID, NULL);
 			return 3;
 		}
 	}
