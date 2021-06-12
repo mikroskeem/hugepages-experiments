@@ -10,8 +10,6 @@
 
 #include <dirent.h>
 #include <libgen.h>
-#include <signal.h>
-#include <setjmp.h>
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/resource.h>
@@ -176,17 +174,7 @@ static std::unique_ptr<size_t> check_cgroup_limits(const unsigned short shift) {
 	return std::make_unique<size_t>(std::stol(hugetlb_max_str));
 }
 
-static jmp_buf the_jmpbuf;
-static size_t i; // XXX: gross hack
-
-void sigbus(int sig) {
-	longjmp(the_jmpbuf, 1);
-}
-
 int main(int argc, char **argv) {
-	// Set up SIGBUS handler
-	signal(SIGBUS, sigbus);
-
 	// Figure out supported types
 	std::vector<std::pair<size_t, unsigned short>> supported_hps;
 	determine_supported_hps(supported_hps);
@@ -234,7 +222,8 @@ int main(int argc, char **argv) {
 	if (const auto limit_opt = check_cgroup_limits(shift)) {
 		auto limit = *limit_opt;
 		if (sz > limit) {
-			fprintf(stderr, "WARNING: requested size is larger than cgroup hugetlb max limit, SIGBUS expected (%lu > %lu)\n", sz, limit);
+			fprintf(stderr, "WARNING: requested size is larger than cgroup hugetlb max limit, adjusting size (%lu > %lu)\n", sz, limit);
+			sz = limit;
 		} else {
 			fprintf(stderr, "NOTE: cgroup hugetlb limit present, max=%lu\n", limit);
 		}
@@ -288,22 +277,16 @@ int main(int argc, char **argv) {
 
 	// Based on linux/tools/testing/selftests/vm/hugepage-shm.c
 	fprintf(stderr, "Starting the writes:\n");
-	size_t maxlen = sz;
-	if (setjmp(the_jmpbuf) == 0) {
-		for (i = 0; i < maxlen; i++) {
-			shmaddr[i] = (char)(i);
-			if (!(i % (1024 * 1024))) {
-				fprintf(stderr, ".");
-			}
+	for (size_t i = 0; i < sz; i++) {
+		shmaddr[i] = (char)(i);
+		if (!(i % (1024 * 1024))) {
+			fprintf(stderr, ".");
 		}
-		fprintf(stderr, "\n");
-	} else {
-		fprintf(stderr, "\n*** Caught SIGBUS, tried writing at len=%lu (div=%lu). Adjusting maxlen to it\n", i, i / (1 << shift));
-		maxlen = i;
 	}
+	fprintf(stderr, "\n");
 
 	fprintf(stderr, "Starting the Check...");
-	for (i = 0; i < maxlen; i++) {
+	for (size_t i = 0; i < sz; i++) {
 		if (shmaddr[i] != (char) i) {
 			fprintf(stderr, "\nIndex %lu mismatched\n", i);
 			shmdt(shmaddr);
