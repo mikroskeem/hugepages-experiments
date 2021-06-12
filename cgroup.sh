@@ -42,5 +42,9 @@ enable_controller "${cgpath}/${cg_name}" "hugetlb" || true
 # In this case, do 1GB
 echo $(( 1 * 1073741824 )) > "${cgpath}/${cg_name}/hugetlb.1GB.max"
 
-echo ">>> Starting shell in the cgroup"
-exec sudo -u "#${ORIG_UID}" -g "#${ORIG_GID}" bash -i
+if [ -n "${*:-}" ]; then
+	exec sudo -u "#${ORIG_UID}" -g "#${ORIG_GID}" -- "${@}"
+else
+	echo ">>> Starting shell in the cgroup"
+	exec sudo -u "#${ORIG_UID}" -g "#${ORIG_GID}" bash -i
+fi
