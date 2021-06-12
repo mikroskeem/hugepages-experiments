@@ -15,8 +15,6 @@
 #define _MAP_HUGE_SHIFT 26
 #define HONOR_MLOCK_ULIMIT_DEPRECATION true
 
-#define IS_POW2(n) ((n) > 0 && ((n) & ((n) - 1)) == 0)
-
 int main(int argc, char **argv) {
 	// Figure out supported types
 	auto supported_hps = hugepage::determine_supported_hps();

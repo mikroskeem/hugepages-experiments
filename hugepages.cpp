@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <exception>
 #include <fstream>
 #include <string>
@@ -8,6 +9,8 @@
 #include <unistd.h>
 
 #include "hugepages.hpp"
+
+#define IS_POW2(n) ((n) > 0 && ((n) & ((n) - 1)) == 0)
 
 inline static unsigned short determine_shift(size_t size) {
         unsigned short shift = 0;
@@ -32,8 +35,12 @@ static std::unique_ptr<size_t> is_hugepage(const std::string &filename) {
                 return nullptr;
         }
 
-        const std::string raw_size = filename.substr(prefix.length(), filename.length() - prefix.length() - 2);
-        return std::make_unique<size_t>(std::stol(raw_size) * 1024UL);
+        const auto raw_size = filename.substr(prefix.length(), filename.length() - prefix.length() - 2);
+	const auto size = std::stol(raw_size) * 1024UL;
+
+	assert(IS_POW2(size));
+
+        return std::make_unique<size_t>(size);
 }
 
 std::vector<hugepage::HugepageInfo> hugepage::determine_supported_hps() {
