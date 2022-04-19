@@ -13,7 +13,9 @@ namespace cgroup {
 
 	std::vector<CGHierarchy> get_hierarchies(const pid_t pid);
 
-	std::unique_ptr<size_t> check_hugetlb_limit(const unsigned short shift);
+	// remaining limit (max - current), max
+	std::unique_ptr<std::pair<size_t, size_t>> check_hugetlb_limit(const unsigned short shift);
 
-	std::unique_ptr<size_t> check_hugetlb_limit(const pid_t pid, const unsigned short shift);
+	// remaining limit (max - current), max
+	std::unique_ptr<std::pair<size_t, size_t>> check_hugetlb_limit(const pid_t pid, const unsigned short shift);
 }

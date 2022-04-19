@@ -8,6 +8,22 @@
 
 #include "cgroups.hpp"
 
+static size_t read_size(std::string path) {
+	std::ifstream handle(path);
+	if (!handle.good()) {
+		return 0;
+	}
+
+	std::string str;
+	handle >> str;
+
+	if (str == "max") {
+		return 0;
+	}
+
+	return std::stol(str);
+}
+
 std::vector<cgroup::CGHierarchy> cgroup::get_hierarchies() {
 	return get_hierarchies(getpid());
 }
@@ -42,11 +58,11 @@ std::vector<cgroup::CGHierarchy> cgroup::get_hierarchies(const pid_t pid) {
 	return collected_cg_hierarchies;
 }
 
-std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const unsigned short shift) {
+std::unique_ptr<std::pair<size_t, size_t>> cgroup::check_hugetlb_limit(const unsigned short shift) {
 	return cgroup::check_hugetlb_limit(getpid(), shift);
 }
 
-std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const pid_t pid, const unsigned short shift) {
+std::unique_ptr<std::pair<size_t, size_t>> cgroup::check_hugetlb_limit(const pid_t pid, const unsigned short shift) {
 	auto collected_cg_hierarchies = get_hierarchies(pid);
 
 	// Try finding hugetlb controller
@@ -72,21 +88,21 @@ std::unique_ptr<size_t> cgroup::check_hugetlb_limit(const pid_t pid, const unsig
 		throw std::runtime_error("shift too large");
 	}
 
-	// Try to read hugetlb limits
 	char pathbuf[PATH_MAX];
+
+	// Try reading current max
 	snprintf(pathbuf, PATH_MAX-1, CG_PATH "%s/hugetlb.%lu%s.max", std::get<2>(hugetlb_controller).c_str(), sz, szsuffix.c_str());
-
-	std::ifstream hugetlb_max_file(pathbuf);
-	if (!hugetlb_max_file.good()) {
+	size_t hugetlb_max = read_size(pathbuf);
+	if (hugetlb_max == 0) {
 		return nullptr;
 	}
 
-	std::string hugetlb_max_str;
-	hugetlb_max_file >> hugetlb_max_str;
+	// Try reading current usage
+	snprintf(pathbuf, PATH_MAX-1, CG_PATH "%s/hugetlb.%lu%s.current", std::get<2>(hugetlb_controller).c_str(), sz, szsuffix.c_str());
+	size_t hugetlb_current = read_size(pathbuf);
 
-	if (hugetlb_max_str == "max") {
-		return nullptr;
-	}
+	size_t hugetlb_limit = hugetlb_max - hugetlb_current;
+	std::pair<size_t, size_t> p(hugetlb_limit, hugetlb_max);
 
-	return std::make_unique<size_t>(std::stol(hugetlb_max_str));
+	return std::make_unique<std::pair<size_t, size_t>>(p);
 }

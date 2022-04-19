@@ -66,11 +66,12 @@ int main(int argc, char **argv) {
 	// Check cgroup limits to avoid nasty SIGBUS
 	if (const auto limit_opt = cgroup::check_hugetlb_limit(shift)) {
 		auto limit = *limit_opt;
-		if (sz > limit) {
-			fprintf(stderr, "WARNING: requested size is larger than cgroup hugetlb max limit, adjusting size (%lu > %lu)\n", sz, limit);
-			sz = limit;
-		} else {
-			fprintf(stderr, "NOTE: cgroup hugetlb limit present, max=%lu\n", limit);
+		auto available = limit.first;
+		auto max = limit.second;
+		fprintf(stderr, "NOTE: cgroup hugetlb limit present - max=%lu, available=%lu\n", max, available);
+		if (sz > available) {
+			fprintf(stderr, "WARNING: requested size is larger than cgroup hugetlb allows, adjusting size (%lu > %lu)\n", sz, available);
+			sz = available;
 		}
 	}
 
