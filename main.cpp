@@ -1,10 +1,12 @@
 #include <cerrno>
 #include <cstdio>
 #include <exception>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <system_error>
 
+#include <stdio.h>
 #include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -138,6 +140,11 @@ int main(int argc, char **argv) {
 		}
 	}
 	fprintf(stderr, "Done.\n");
+
+	if (isatty(STDIN_FILENO)) {
+		fprintf(stderr, "Press any key to exit\n");
+		(void) getchar();
+	}
 
 	if (shmdt(shmaddr) < 0) {
 		throw std::system_error(errno, std::generic_category(), "shmdt");
